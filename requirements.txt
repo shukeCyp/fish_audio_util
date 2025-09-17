@@ -1,5 +1,5 @@
 # 核心依赖
-fish-audio-sdk>=1.0.0
+fish-audio-sdk>=2025.6.3
 PyQt5>=5.15.0
 requests>=2.28.0
 

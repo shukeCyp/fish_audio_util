@@ -85,7 +85,7 @@ exe = EXE(
     runtime_tmpdir=None,
     console=False,  # 设置为 False 以隐藏控制台窗口
     disable_windowed_traceback=False,
-    target_arch=None,
+    target_arch='x86' if os.environ.get('PROCESSOR_ARCHITECTURE') == 'x86' or os.environ.get('PROCESSOR_ARCHITEW6432') is None else None,
     codesign_identity=None,
     entitlements_file=None,
     icon='resources/icons/app.ico' if os.path.exists('resources/icons/app.ico') else None,
