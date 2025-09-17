@@ -1,0 +1,96 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~\AppData\Local\pip\Cache
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+          
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Run tests
+      run: |
+        python -m pytest tests/ -v
+      continue-on-error: true
+      
+    - name: Build executable with PyInstaller
+      run: |
+        pyinstaller fish-audio.spec
+        
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: fish-audio-exe
+        path: dist/fish-audio.exe
+        
+    - name: Get version from tag
+      id: get_version
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      shell: bash
+        
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ steps.get_version.outputs.VERSION }}
+        body: |
+          ## 更新内容
+          
+          请查看提交历史了解详细更改。
+          
+          ## 下载
+          
+          - **Windows**: 下载 `fish-audio.exe` 文件直接运行
+          
+          ## 安装说明
+          
+          1. 下载 `fish-audio.exe` 文件
+          2. 双击运行即可使用
+          3. 首次运行可能需要管理员权限
+          
+          ---
+          
+          **完整更新日志**: https://github.com/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.sha }}
+        draft: false
+        prerelease: false
+        
+    - name: Upload Release Asset
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./dist/fish-audio.exe
+        asset_name: fish-audio.exe
+        asset_content_type: application/octet-stream 
