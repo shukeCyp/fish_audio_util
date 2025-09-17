@@ -3,13 +3,6 @@ fish-audio-sdk>=2025.6.3
 PyQt5>=5.15.0
 requests>=2.28.0
 
-# 音频处理
-numpy>=1.21.0
-scipy>=1.7.0
-
-# 文件处理
-pathlib2>=2.3.0
-
 # 日志记录
 loguru>=0.6.0
 
