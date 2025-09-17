@@ -188,6 +188,8 @@ class MainWindow(QMainWindow):
         self.batch_thread = None
         self.progress_dialog = None
         self.all_voices = []  # 存储所有音色数据
+        self.loading_timer = None  # 加载动画定时器
+        self.loading_dots = 0  # 加载点数
         
         # 初始化界面
         self.init_ui()
@@ -326,6 +328,12 @@ class MainWindow(QMainWindow):
         self.refresh_voices_btn = QPushButton("刷新音色列表")
         self.refresh_voices_btn.clicked.connect(self.refresh_voices)
         voice_layout.addWidget(self.refresh_voices_btn)
+        
+        # 添加加载状态标签
+        self.voice_loading_label = QLabel("")
+        self.voice_loading_label.setStyleSheet("color: blue; font-weight: bold;")
+        self.voice_loading_label.setVisible(False)
+        voice_layout.addWidget(self.voice_loading_label)
         
         layout.addWidget(voice_group)
         
@@ -524,6 +532,8 @@ class MainWindow(QMainWindow):
     def refresh_voices(self):
         """刷新音色列表（异步方式避免阻塞UI）"""
         try:
+            # 显示加载状态
+            self.show_voice_loading(True)
             self.add_log("正在获取音色列表...")
             self.status_bar.showMessage("正在获取音色列表...")
             
@@ -536,10 +546,14 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.exception(f"启动音色加载失败: {e}")
             self.add_log(f"启动音色加载失败: {str(e)}")
+            self.show_voice_loading(False)
     
     def on_voices_loaded(self, voices):
         """音色加载完成的回调"""
         try:
+            # 隐藏加载状态
+            self.show_voice_loading(False)
+            
             self.all_voices = voices  # 保存所有音色数据
             
             self.add_log(f"获取到 {len(voices)} 个音色模型")
@@ -551,9 +565,13 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.exception(f"处理音色列表失败: {e}")
             self.add_log(f"处理音色列表失败: {str(e)}")
+            self.show_voice_loading(False)
     
     def on_voices_load_error(self, error_message):
         """音色加载失败的回调"""
+        # 隐藏加载状态
+        self.show_voice_loading(False)
+        
         logger.error(f"获取音色列表失败: {error_message}")
         self.add_log(f"获取音色列表失败: {error_message}")
         self.status_bar.showMessage("获取音色列表失败")
@@ -856,8 +874,8 @@ class MainWindow(QMainWindow):
                 # API密钥已在初始化时设置，这里只需要更新UI状态
                 self.update_api_status(True, "API密钥已加载")
                 self.add_log("已加载保存的API密钥")
-                # 自动刷新音色列表
-                self.refresh_voices()
+                # 延迟自动刷新音色列表，避免阻塞启动
+                QTimer.singleShot(500, lambda: self.auto_refresh_voices_on_startup())
             else:
                 self.update_api_status(False, "未设置API密钥")
         except Exception as e:
@@ -898,7 +916,8 @@ class MainWindow(QMainWindow):
             self.update_api_status(True, "API密钥已保存")
             self.add_log("API密钥已保存并更新")
             
-            # 刷新音色列表
+            # 自动刷新音色列表
+            self.add_log("正在自动刷新音色列表...")
             self.refresh_voices()
             
         except Exception as e:
@@ -939,6 +958,7 @@ class MainWindow(QMainWindow):
                 self.add_log("API连接测试成功！")
                 QMessageBox.information(self, "成功", "API连接测试成功！")
                 # 测试成功后自动刷新音色列表
+                self.add_log("连接成功，正在自动刷新音色列表...")
                 self.refresh_voices()
             else:
                 self.update_api_status(False, "连接失败")
@@ -966,3 +986,65 @@ class MainWindow(QMainWindow):
             self.api_status_label.setStyleSheet("color: blue; font-weight: bold;")
         
         self.api_status_label.setText(message) 
+    
+    def auto_refresh_voices_on_startup(self):
+        """启动时自动刷新音色列表"""
+        try:
+            self.add_log("正在自动加载音色列表...")
+            self.refresh_voices()
+        except Exception as e:
+            logger.error(f"启动时自动刷新音色失败: {e}")
+            self.add_log(f"自动加载音色列表失败: {str(e)}")
+    
+    def show_voice_loading(self, is_loading: bool):
+        """显示/隐藏音色加载状态
+        
+        Args:
+            is_loading: True显示加载状态，False隐藏加载状态
+        """
+        if is_loading:
+            # 显示加载状态
+            self.voice_loading_label.setText("🔄 正在获取音色列表...")
+            self.voice_loading_label.setVisible(True)
+            
+            # 禁用相关按钮
+            self.refresh_voices_btn.setEnabled(False)
+            self.refresh_voices_btn.setText("获取中...")
+            self.voice_combo.setEnabled(False)
+            self.voice_type_combo.setEnabled(False)
+            
+            # 启动加载动画
+            self.start_loading_animation()
+            
+        else:
+            # 隐藏加载状态
+            self.voice_loading_label.setVisible(False)
+            
+            # 恢复按钮状态
+            self.refresh_voices_btn.setEnabled(True)
+            self.refresh_voices_btn.setText("刷新音色列表")
+            self.voice_combo.setEnabled(True)
+            self.voice_type_combo.setEnabled(True)
+            
+            # 停止加载动画
+            self.stop_loading_animation()
+    
+    def start_loading_animation(self):
+        """启动加载动画"""
+        if self.loading_timer is None:
+            self.loading_timer = QTimer()
+            self.loading_timer.timeout.connect(self.update_loading_animation)
+        
+        self.loading_dots = 0
+        self.loading_timer.start(500)  # 每500ms更新一次
+    
+    def stop_loading_animation(self):
+        """停止加载动画"""
+        if self.loading_timer:
+            self.loading_timer.stop()
+    
+    def update_loading_animation(self):
+        """更新加载动画"""
+        dots = "." * (self.loading_dots % 4)
+        self.voice_loading_label.setText(f"🔄 正在获取音色列表{dots}")
+        self.loading_dots += 1 
